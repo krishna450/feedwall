@@ -16,31 +16,43 @@ class Feedwall_Cron {
     public static function run() {
         global $wpdb;
 
-        $table = Feedwall_DB::table('posts');
+        $posts_table = Feedwall_DB::table('posts');
+        $comments_table = Feedwall_DB::table('comments');
 
-        // Expire after 24h
+        // 1️⃣ Expire posts (>24h)
         $wpdb->query("
-            UPDATE $table
+            UPDATE $posts_table
             SET status = 'expired'
             WHERE created_at < NOW() - INTERVAL 24 HOUR
             AND status = 'active'
         ");
 
-        // Delete after 120h
+        // 2️⃣ Fetch posts to delete (>120h)
         $posts = $wpdb->get_results("
-            SELECT * FROM $table
+            SELECT * FROM $posts_table
             WHERE created_at < NOW() - INTERVAL 120 HOUR
         ");
 
+        $upload = wp_upload_dir();
+        $dir = $upload['basedir'] . '/feedwall_media/';
+
         foreach ($posts as $post) {
 
-            $upload = wp_upload_dir();
-            $dir = $upload['basedir'] . '/feedwall_media/';
+            // Delete images safely
+            if (!empty($post->image_path)) {
+                @unlink($dir . $post->image_path . '_thumb.jpg');
+                @unlink($dir . $post->image_path . '_wall.jpg');
+            }
 
-            @unlink($dir . $post->image_path . '_thumb.jpg');
-            @unlink($dir . $post->image_path . '_wall.jpg');
+            // Delete comments first (FK safety logic)
+            $wpdb->delete($comments_table, [
+                'post_id' => $post->post_id
+            ]);
 
-            $wpdb->delete($table, ['post_id' => $post->post_id]);
+            // Delete post
+            $wpdb->delete($posts_table, [
+                'post_id' => $post->post_id
+            ]);
         }
     }
 }
