@@ -39,3 +39,15 @@
     transform: translateX(-50%);
     z-index: 999;
 }
+#fw-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+}
+
+.fw-modal-content {
+    background: #111;
+    padding: 20px;
+    margin: 10% auto;
+    width: 300px;
+}
