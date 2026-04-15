@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 class Feedwall_Telegram {
 
-    const BOT_TOKEN = 'YOUR_BOT_TOKEN';
+    const BOT_TOKEN = '7663975181:AAHBkpW6UepLA3uNpueaixRjrkTnsqssnrQ';
 
     public static function tg_pair($req) {
         global $wpdb;
