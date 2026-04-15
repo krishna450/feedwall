@@ -7,16 +7,66 @@
 
 if (!defined('ABSPATH')) exit;
 
+/**
+ * Constants
+ */
 define('FEEDWALL_PATH', plugin_dir_path(__FILE__));
 define('FEEDWALL_URL', plugin_dir_url(__FILE__));
 
+/**
+ * Core Includes
+ */
 require_once FEEDWALL_PATH . 'includes/class-feedwall-activator.php';
 require_once FEEDWALL_PATH . 'includes/class-feedwall-db.php';
+
+/**
+ * Phase 2 Includes (Auth + Geo + API)
+ */
+require_once FEEDWALL_PATH . 'includes/class-feedwall-auth.php';
+require_once FEEDWALL_PATH . 'includes/class-feedwall-geo.php';
+require_once FEEDWALL_PATH . 'includes/class-feedwall-api.php';
+
+/**
+ * Phase 3 Includes (Posts + Moderation + Cron)
+ */
+require_once FEEDWALL_PATH . 'includes/class-feedwall-posts.php';
+require_once FEEDWALL_PATH . 'includes/class-feedwall-moderation.php';
+require_once FEEDWALL_PATH . 'includes/class-feedwall-cron.php';
+
+/**
+ * UI + Core सिस्टम
+ */
 require_once FEEDWALL_PATH . 'includes/class-feedwall-core.php';
 require_once FEEDWALL_PATH . 'includes/class-feedwall-shortcode.php';
 
-register_activation_hook(__FILE__, ['Feedwall_Activator', 'activate']);
+/**
+ * 🔁 Custom Cron Interval (5 minutes)
+ */
+add_filter('cron_schedules', function($schedules) {
+    if (!isset($schedules['five_minutes'])) {
+        $schedules['five_minutes'] = [
+            'interval' => 300,
+            'display'  => 'Every 5 Minutes'
+        ];
+    }
+    return $schedules;
+});
 
+/**
+ * 🔌 Plugin Activation
+ */
+register_activation_hook(__FILE__, function() {
+    Feedwall_Activator::activate();
+
+    // Ensure cron is scheduled
+    if (class_exists('Feedwall_Cron')) {
+        Feedwall_Cron::schedule();
+    }
+});
+
+/**
+ * 🚀 Boot Plugin
+ */
 function run_feedwall() {
     $plugin = new Feedwall_Core();
     $plugin->run();
