@@ -13,3 +13,29 @@
     align-items: center;
     height: 100%;
 }
+
+#fw-canvas {
+    position: absolute;
+    width: 2000px;
+    height: 2000px;
+    transform-origin: center;
+}
+
+.fw-post {
+    position: absolute;
+    width: 120px;
+    transition: transform 0.5s ease, opacity 1s;
+}
+
+.fw-post img {
+    width: 100%;
+    border-radius: 8px;
+}
+
+#fw-new-btn {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+}
