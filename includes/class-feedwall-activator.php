@@ -4,9 +4,12 @@ if (!defined('ABSPATH')) exit;
 class Feedwall_Activator {
 
     public static function activate() {
-        self::create_tables();
-        self::create_upload_dir();
-    }
+    self::create_tables();
+    self::create_upload_dir();
+
+    require_once FEEDWALL_PATH . 'includes/class-feedwall-cron.php';
+    Feedwall_Cron::schedule();
+}
 
     private static function create_tables() {
         global $wpdb;
