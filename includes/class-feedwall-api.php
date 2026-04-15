@@ -42,6 +42,30 @@ register_rest_route('feedwall/v1', '/get-wall', [
     'methods' => 'POST',
     'callback' => ['Feedwall_Moderation', 'report_post']
 ]);
+        register_rest_route('feedwall/v1', '/add-comment', [
+    'methods' => 'POST',
+    'callback' => ['Feedwall_Comments', 'add_comment']
+]);
+
+register_rest_route('feedwall/v1', '/get-comments', [
+    'methods' => 'GET',
+    'callback' => ['Feedwall_Comments', 'get_comments']
+]);
+        
+register_rest_route('feedwall/v1', '/my-threads', [
+    'methods' => 'GET',
+    'callback' => ['Feedwall_Threads', 'my_threads']
+]);
+
+register_rest_route('feedwall/v1', '/tg-pair', [
+    'methods' => 'POST',
+    'callback' => ['Feedwall_Telegram', 'tg_pair']
+]);
+
+register_rest_route('feedwall/v1', '/tg-webhook', [
+    'methods' => 'POST',
+    'callback' => ['Feedwall_Telegram', 'webhook']
+]);
     }
 
     public function check_username($req) {
