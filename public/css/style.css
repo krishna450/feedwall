@@ -1,0 +1,15 @@
+#feedwall-root {
+    width: 100%;
+    height: 100vh;
+    background: #0f0f0f;
+    color: #fff;
+    overflow: hidden;
+    position: relative;
+}
+
+#feedwall-app {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
