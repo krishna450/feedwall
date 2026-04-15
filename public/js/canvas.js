@@ -96,4 +96,39 @@ export class Canvas {
             scale(${this.scale})
         `;
     }
+    openComments(post) {
+    const modal = document.createElement('div');
+    modal.id = 'fw-modal';
+
+    modal.innerHTML = `
+        <div class="fw-modal-content">
+            <h3>Comments</h3>
+            <div id="fw-comments"></div>
+            <input id="fw-comment-input" placeholder="Write..." />
+            <button id="fw-send">Send</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    this.loadComments(post.post_id);
+
+    document.getElementById('fw-send').onclick = async () => {
+        const text = document.getElementById('fw-comment-input').value;
+
+        await fetch(FEEDWALL_CONFIG.api_url + 'add-comment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.token
+            },
+            body: JSON.stringify({
+                post_id: post.post_id,
+                content_text: text
+            })
+        });
+
+        this.loadComments(post.post_id);
+    };
+}
 }
