@@ -29,6 +29,15 @@ class Feedwall_API {
             'methods' => 'POST',
             'callback' => [$this, 'geo_override']
         ]);
+        register_rest_route('feedwall/v1', '/submit-post', [
+    'methods' => 'POST',
+    'callback' => ['Feedwall_Posts', 'submit_post']
+]);
+
+register_rest_route('feedwall/v1', '/get-wall', [
+    'methods' => 'GET',
+    'callback' => ['Feedwall_Posts', 'get_wall']
+]);
     }
 
     public function check_username($req) {
