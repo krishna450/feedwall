@@ -38,6 +38,10 @@ register_rest_route('feedwall/v1', '/get-wall', [
     'methods' => 'GET',
     'callback' => ['Feedwall_Posts', 'get_wall']
 ]);
+        register_rest_route('feedwall/v1', '/report-post', [
+    'methods' => 'POST',
+    'callback' => ['Feedwall_Moderation', 'report_post']
+]);
     }
 
     public function check_username($req) {
