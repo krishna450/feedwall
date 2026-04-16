@@ -106,3 +106,27 @@
     margin: 10% auto;
     width: 300px;
 }
+
+#fw-canvas-wrapper {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+}
+
+#fw-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: center;
+}
+
+.fw-post {
+    position: absolute;
+    width: 120px;
+    transition: transform 0.4s ease, opacity 1s;
+}
+
+.fw-post img {
+    width: 100%;
+    border-radius: 8px;
+}
