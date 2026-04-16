@@ -22,6 +22,11 @@ class Feedwall_Auth {
 
         $table = Feedwall_DB::table('sessions');
 
+        // Optional: clean old sessions for this user
+        $wpdb->query($wpdb->prepare("
+            DELETE FROM $table WHERE user_id = %d
+        ", $user_id));
+
         $wpdb->insert($table, [
             'user_id' => $user_id,
             'token_hash' => password_hash($token, PASSWORD_DEFAULT),
@@ -36,7 +41,14 @@ class Feedwall_Auth {
 
         $table = Feedwall_DB::table('sessions');
 
-        $sessions = $wpdb->get_results("SELECT * FROM $table WHERE expires_at > NOW()");
+        // Only fetch recent sessions (limit scope)
+        $sessions = $wpdb->get_results("
+            SELECT user_id, token_hash 
+            FROM $table 
+            WHERE expires_at > NOW()
+            ORDER BY created_at DESC
+            LIMIT 50
+        ");
 
         foreach ($sessions as $session) {
             if (password_verify($token, $session->token_hash)) {
@@ -47,7 +59,13 @@ class Feedwall_Auth {
         return false;
     }
 
-    public static function rate_limit($key, $limit = 5, $window = 300) {
+    public static function rate_limit($key, $limit = null, $window = 300) {
+
+        // ✅ Use settings if not provided
+        if ($limit === null) {
+            $limit = Feedwall_Settings::get('login_limit', 5);
+        }
+
         $attempts = get_transient($key);
 
         if ($attempts === false) {
