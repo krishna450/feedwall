@@ -7,23 +7,23 @@ const App = {
     offset: { x: 0, y: 0 },
 
     posts: [],
-    elements: new Map(), // DOM cache
+    elements: new Map(),
     viewport: { width: window.innerWidth, height: window.innerHeight },
+
+    velocity: { x: 0, y: 0 },
 
     init() {
         this.root = document.getElementById("feedwall-root");
         if (!this.root) return;
 
         if (this.token) this.loadApp();
-        else this.showAuth();
+        else this.showAuth?.();
 
         window.addEventListener("resize", () => {
             this.viewport.width = window.innerWidth;
             this.viewport.height = window.innerHeight;
         });
     },
-
-    // ---------------- APP ----------------
 
     async loadApp() {
         this.root.innerHTML = `
@@ -37,12 +37,13 @@ const App = {
             </div>
         `;
 
-        document.getElementById("fw-logout").onclick = () => this.logout();
-
         this.canvas = document.getElementById("fw-canvas");
+        document.getElementById("fw-logout").onclick = () => this.logout?.();
 
         this.initPanZoom();
         await this.loadWall();
+
+        this.animateLoop(); // continuous animation loop
     },
 
     async loadWall() {
@@ -100,6 +101,14 @@ const App = {
 
             const el = this.elements.get(p.post_id);
 
+            const ageHrs = (Date.now() - new Date(p.created_at)) / 3600000;
+
+            // Glow strength (strong when new)
+            const glow = Math.max(0, 1 - ageHrs / 6);
+
+            // Pulse animation
+            const pulse = 1 + Math.sin(Date.now() / 400 + i) * 0.05 * glow;
+
             // LOD
             const imgSrc = this.scale > 1.5
                 ? `/wp-content/uploads/feedwall_media/${p.image_path}_wall.jpg`
@@ -110,8 +119,32 @@ const App = {
                 <p>${p.content_text}</p>
             `;
 
-            el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+            el.style.transform = `
+                translate(${pos.x}px, ${pos.y}px)
+                scale(${pulse})
+            `;
+
+            // Glow + highlight
+            el.style.boxShadow = glow > 0
+                ? `0 0 ${20 * glow}px rgba(255,100,150,${0.6 * glow})`
+                : "none";
+
+            el.style.border = glow > 0.7
+                ? "2px solid rgba(255,120,180,0.8)"
+                : "none";
+
+            el.style.opacity = Math.max(0.2, 1 - ageHrs / 24);
         });
+    },
+
+    // ---------------- ANIMATION LOOP ----------------
+
+    animateLoop() {
+        const loop = () => {
+            this.renderVisible();
+            requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
     },
 
     // ---------------- PAN + ZOOM ----------------
@@ -120,7 +153,6 @@ const App = {
         let dragging = false;
         let start = { x: 0, y: 0 };
 
-        // Desktop
         this.canvas.addEventListener("mousedown", e => {
             dragging = true;
             start = { x: e.clientX, y: e.clientY };
@@ -129,16 +161,22 @@ const App = {
         window.addEventListener("mousemove", e => {
             if (!dragging) return;
 
-            this.offset.x += e.clientX - start.x;
-            this.offset.y += e.clientY - start.y;
+            this.velocity.x = e.clientX - start.x;
+            this.velocity.y = e.clientY - start.y;
+
+            this.offset.x += this.velocity.x;
+            this.offset.y += this.velocity.y;
 
             this.updateTransform();
             start = { x: e.clientX, y: e.clientY };
         });
 
-        window.addEventListener("mouseup", () => dragging = false);
+        window.addEventListener("mouseup", () => {
+            dragging = false;
+            this.applyMomentum();
+        });
 
-        // Mobile touch
+        // touch
         let lastTouch = null;
 
         this.canvas.addEventListener("touchstart", e => {
@@ -155,15 +193,58 @@ const App = {
             lastTouch = touch;
         });
 
-        // Zoom
+        // zoom
         this.canvas.addEventListener("wheel", e => {
             e.preventDefault();
+            const target = this.scale + e.deltaY * -0.001;
+            this.animateZoom(target);
+        });
+    },
 
-            this.scale += e.deltaY * -0.001;
-            this.scale = Math.min(Math.max(0.4, this.scale), 3);
+    applyMomentum() {
+        const decay = 0.95;
+
+        const step = () => {
+            this.velocity.x *= decay;
+            this.velocity.y *= decay;
+
+            this.offset.x += this.velocity.x;
+            this.offset.y += this.velocity.y;
 
             this.updateTransform();
-        });
+
+            if (Math.abs(this.velocity.x) > 0.5 || Math.abs(this.velocity.y) > 0.5) {
+                requestAnimationFrame(step);
+            }
+        };
+
+        requestAnimationFrame(step);
+    },
+
+    animateZoom(target) {
+        target = Math.min(Math.max(0.4, target), 3);
+
+        const start = this.scale;
+        const duration = 200;
+        const startTime = performance.now();
+
+        const animate = (time) => {
+            const t = (time - startTime) / duration;
+            if (t >= 1) {
+                this.scale = target;
+                this.updateTransform();
+                return;
+            }
+
+            const eased = 1 - Math.pow(1 - t, 3);
+
+            this.scale = start + (target - start) * eased;
+            this.updateTransform();
+
+            requestAnimationFrame(animate);
+        };
+
+        requestAnimationFrame(animate);
     },
 
     updateTransform() {
@@ -171,8 +252,6 @@ const App = {
             translate(${this.offset.x}px, ${this.offset.y}px)
             scale(${this.scale})
         `;
-
-        requestAnimationFrame(() => this.renderVisible());
     },
 
     // ---------------- COMMENTS ----------------
