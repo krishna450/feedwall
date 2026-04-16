@@ -12,7 +12,7 @@ class Feedwall_Posts {
         $user_id = self::auth_user($req);
         if (!$user_id) return ['error' => 'Unauthorized'];
 
-        $text = sanitize_textarea_field($req['content_text']);
+        $text = sanitize_textarea_field($req['content_text'] ?? '');
 
         if (strlen($text) > 500) {
             return ['error' => 'Text too long'];
@@ -29,7 +29,11 @@ class Feedwall_Posts {
             if (isset($image_path['error'])) return $image_path;
         }
 
+        // ✅ Use settings fallback for state
         $state = Feedwall_Geo::from_request();
+        if (!$state) {
+            $state = Feedwall_Settings::get('default_state', 'KL');
+        }
 
         $wpdb->insert(Feedwall_DB::table('posts'), [
             'user_id' => $user_id,
@@ -47,6 +51,8 @@ class Feedwall_Posts {
 
         $words = json_decode(file_get_contents($file), true);
 
+        if (!is_array($words)) return false;
+
         foreach ($words as $word) {
             if (stripos($text, $word) !== false) {
                 return true;
@@ -56,6 +62,11 @@ class Feedwall_Posts {
     }
 
     private static function process_image($file) {
+
+        if (empty($file['tmp_name']) || !file_exists($file['tmp_name'])) {
+            return ['error' => 'Invalid upload'];
+        }
+
         if ($file['size'] > self::MAX_SIZE) {
             return ['error' => 'File too large'];
         }
@@ -67,12 +78,33 @@ class Feedwall_Posts {
         $upload = wp_upload_dir();
         $dir = $upload['basedir'] . '/feedwall_media/';
 
+        if (!file_exists($dir)) {
+            wp_mkdir_p($dir);
+        }
+
         $name = uniqid('fw_');
 
         $thumb = $dir . $name . '_thumb.jpg';
         $wall = $dir . $name . '_wall.jpg';
 
-        $src = imagecreatefromstring(file_get_contents($file['tmp_name']));
+        // ✅ Safer image creation based on MIME
+        switch ($file['type']) {
+            case 'image/jpeg':
+                $src = imagecreatefromjpeg($file['tmp_name']);
+                break;
+            case 'image/png':
+                $src = imagecreatefrompng($file['tmp_name']);
+                break;
+            case 'image/webp':
+                $src = function_exists('imagecreatefromwebp') ? imagecreatefromwebp($file['tmp_name']) : null;
+                break;
+            case 'image/gif':
+                $src = imagecreatefromgif($file['tmp_name']);
+                break;
+            default:
+                return ['error' => 'Unsupported image'];
+        }
+
         if (!$src) return ['error' => 'Invalid image'];
 
         // Thumb
@@ -84,6 +116,8 @@ class Feedwall_Posts {
         imagejpeg($wall_img, $wall, 85);
 
         imagedestroy($src);
+        imagedestroy($thumb_img);
+        imagedestroy($wall_img);
 
         return basename($name);
     }
@@ -92,6 +126,9 @@ class Feedwall_Posts {
         global $wpdb;
 
         $state = Feedwall_Geo::from_request();
+        if (!$state) {
+            $state = Feedwall_Settings::get('default_state', 'KL');
+        }
 
         $table = Feedwall_DB::table('posts');
 
@@ -106,8 +143,15 @@ class Feedwall_Posts {
         return $results;
     }
 
-    private static function auth_user($req) {
-        $headers = getallheaders();
+    // ✅ FIXED: was private → now public
+    public static function auth_user($req) {
+
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+
+        // Fallback for servers without getallheaders
+        if (empty($headers['Authorization'])) {
+            $headers['Authorization'] = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        }
 
         if (empty($headers['Authorization'])) return false;
 
