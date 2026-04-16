@@ -14,10 +14,23 @@ define('FEEDWALL_PATH', plugin_dir_path(__FILE__));
 define('FEEDWALL_URL', plugin_dir_url(__FILE__));
 
 /**
+ * ✅ Composer Autoload (GeoIP dependency)
+ */
+if (file_exists(FEEDWALL_PATH . 'vendor/autoload.php')) {
+    require_once FEEDWALL_PATH . 'vendor/autoload.php';
+}
+
+/**
  * Core Includes
  */
 require_once FEEDWALL_PATH . 'includes/class-feedwall-activator.php';
 require_once FEEDWALL_PATH . 'includes/class-feedwall-db.php';
+
+/**
+ * ✅ Settings System (NEW)
+ */
+require_once FEEDWALL_PATH . 'includes/class-feedwall-settings.php';
+require_once FEEDWALL_PATH . 'includes/class-feedwall-admin.php';
 
 /**
  * Phase 2 Includes (Auth + Geo + API)
@@ -34,7 +47,7 @@ require_once FEEDWALL_PATH . 'includes/class-feedwall-moderation.php';
 require_once FEEDWALL_PATH . 'includes/class-feedwall-cron.php';
 
 /**
- * UI + Core सिस्टम
+ * UI + Core
  */
 require_once FEEDWALL_PATH . 'includes/class-feedwall-core.php';
 require_once FEEDWALL_PATH . 'includes/class-feedwall-shortcode.php';
