@@ -130,3 +130,14 @@
     width: 100%;
     border-radius: 8px;
 }
+
+#fw-new-indicator {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: #ff4757;
+    color: #fff;
+    padding: 8px 12px;
+}
