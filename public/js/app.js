@@ -6,6 +6,10 @@ const App = {
     scale: 1,
     offset: { x: 0, y: 0 },
 
+    posts: [],
+    lastFetch: null,
+    pendingNew: [],
+
     init() {
         this.root = document.getElementById("feedwall-root");
         if (!this.root) return;
@@ -50,9 +54,7 @@ const App = {
             localStorage.setItem("fw_token", data.token);
             this.token = data.token;
             this.loadApp();
-        } else {
-            fwMsg(data.error || "Login failed");
-        }
+        } else fwMsg(data.error);
     },
 
     async register() {
@@ -66,7 +68,7 @@ const App = {
         });
 
         const data = await res.json();
-        fwMsg(data.success ? "Registered! Now login." : data.error);
+        fwMsg(data.success ? "Registered!" : data.error);
     },
 
     logout() {
@@ -82,6 +84,7 @@ const App = {
             <div id="fw-topbar">
                 <button id="fw-logout">Logout</button>
                 <button id="fw-new-post">+ Post</button>
+                <button id="fw-new-indicator" class="hidden">↑ New Posts</button>
             </div>
 
             <div id="fw-canvas-wrapper">
@@ -98,48 +101,54 @@ const App = {
         document.getElementById("fw-logout").onclick = () => this.logout();
         document.getElementById("fw-new-post").onclick = () => this.togglePostBox();
         document.getElementById("fw-submit-post").onclick = () => this.submitPost();
+        document.getElementById("fw-new-indicator").onclick = () => this.injectNewPosts();
 
         this.initPanZoom();
-        this.loadWall();
-    },
-
-    togglePostBox() {
-        document.getElementById("fw-post-box").classList.toggle("hidden");
-    },
-
-    async submitPost() {
-        const text = fwVal("fw-post-text");
-        const file = document.getElementById("fw-post-image").files[0];
-
-        const fd = new FormData();
-        fd.append("content_text", text);
-        if (file) fd.append("image", file);
-
-        const res = await fetch(API_BASE + "submit-post", {
-            method: "POST",
-            headers: { "Authorization": "Bearer " + this.token },
-            body: fd
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-            this.togglePostBox();
-            this.loadWall();
-        }
+        await this.loadWall();
+        this.startPolling();
     },
 
     async loadWall() {
         const res = await fetch(API_BASE + "get-wall");
         const posts = await res.json();
 
-        this.renderPosts(posts);
+        this.posts = posts;
+        this.lastFetch = new Date().toISOString();
+
+        this.renderPosts();
     },
 
-    // ---------------- RADIAL ENGINE ----------------
+    // ---------------- REAL-TIME ----------------
+
+    startPolling() {
+        setInterval(async () => {
+            const res = await fetch(API_BASE + "get-wall");
+            const latest = await res.json();
+
+            const newPosts = latest.filter(p =>
+                new Date(p.created_at) > new Date(this.lastFetch)
+            );
+
+            if (newPosts.length) {
+                this.pendingNew = newPosts;
+                document.getElementById("fw-new-indicator").classList.remove("hidden");
+            }
+        }, 30000);
+    },
+
+    injectNewPosts() {
+        this.posts = [...this.pendingNew, ...this.posts];
+        this.pendingNew = [];
+
+        document.getElementById("fw-new-indicator").classList.add("hidden");
+
+        this.renderPosts(true); // animate center injection
+    },
+
+    // ---------------- RADIAL ----------------
 
     radialPosition(i) {
-        const angle = i * 2.399963; // golden angle
+        const angle = i * 2.399963;
         const radius = 40 + i * 18;
 
         return {
@@ -148,11 +157,11 @@ const App = {
         };
     },
 
-    renderPosts(posts) {
+    renderPosts(animate = false) {
         const canvas = document.getElementById("fw-canvas");
         canvas.innerHTML = "";
 
-        posts.forEach((p, i) => {
+        this.posts.forEach((p, i) => {
             const pos = this.radialPosition(i);
 
             const ageHrs = (Date.now() - new Date(p.created_at)) / 3600000;
@@ -161,13 +170,26 @@ const App = {
             const el = document.createElement("div");
             el.className = "fw-post";
 
-            el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
-            el.style.opacity = opacity;
+            // LOD swap
+            const imgSrc = this.scale > 1.5
+                ? `/wp-content/uploads/feedwall_media/${p.image_path}_wall.jpg`
+                : `/wp-content/uploads/feedwall_media/${p.image_path}_thumb.jpg`;
 
             el.innerHTML = `
-                ${p.image_path ? `<img src="/wp-content/uploads/feedwall_media/${p.image_path}_thumb.jpg">` : ""}
+                ${p.image_path ? `<img src="${imgSrc}">` : ""}
                 <p>${p.content_text}</p>
             `;
+
+            if (animate && i < this.pendingNew.length) {
+                el.style.transform = `translate(0px, 0px)`;
+                setTimeout(() => {
+                    el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+                }, 50);
+            } else {
+                el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+            }
+
+            el.style.opacity = opacity;
 
             el.onclick = () => this.openComments(p.post_id);
 
@@ -207,6 +229,7 @@ const App = {
             this.scale = Math.min(Math.max(0.4, this.scale), 3);
 
             this.updateTransform();
+            this.renderPosts(); // LOD refresh
         });
     },
 
@@ -255,7 +278,6 @@ const App = {
     }
 };
 
-// helpers
 function fwVal(id) { return document.getElementById(id).value; }
 function fwMsg(msg) { document.getElementById("fw-msg").innerText = msg; }
 
