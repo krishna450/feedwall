@@ -27,29 +27,42 @@ class Feedwall_Cron {
             AND status = 'active'
         ");
 
-        // 2️⃣ Fetch posts to delete (>120h)
+        // 2️⃣ Fetch posts to delete (>120h) - limit batch
         $posts = $wpdb->get_results("
-            SELECT * FROM $posts_table
+            SELECT post_id, image_path 
+            FROM $posts_table
             WHERE created_at < NOW() - INTERVAL 120 HOUR
+            LIMIT 100
         ");
 
+        if (!$posts) return;
+
         $upload = wp_upload_dir();
-        $dir = $upload['basedir'] . '/feedwall_media/';
+        $dir = trailingslashit($upload['basedir']) . 'feedwall_media/';
 
         foreach ($posts as $post) {
 
-            // Delete images safely
+            // ✅ Delete images safely
             if (!empty($post->image_path)) {
-                @unlink($dir . $post->image_path . '_thumb.jpg');
-                @unlink($dir . $post->image_path . '_wall.jpg');
+
+                $thumb = $dir . $post->image_path . '_thumb.jpg';
+                $wall  = $dir . $post->image_path . '_wall.jpg';
+
+                if (file_exists($thumb)) {
+                    unlink($thumb);
+                }
+
+                if (file_exists($wall)) {
+                    unlink($wall);
+                }
             }
 
-            // Delete comments first (FK safety logic)
+            // ✅ Delete comments first
             $wpdb->delete($comments_table, [
                 'post_id' => $post->post_id
             ]);
 
-            // Delete post
+            // ✅ Delete post
             $wpdb->delete($posts_table, [
                 'post_id' => $post->post_id
             ]);
