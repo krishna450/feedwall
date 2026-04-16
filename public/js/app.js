@@ -7,8 +7,8 @@ const App = {
     offset: { x: 0, y: 0 },
 
     posts: [],
-    lastFetch: null,
-    pendingNew: [],
+    elements: new Map(), // DOM cache
+    viewport: { width: window.innerWidth, height: window.innerHeight },
 
     init() {
         this.root = document.getElementById("feedwall-root");
@@ -16,65 +16,11 @@ const App = {
 
         if (this.token) this.loadApp();
         else this.showAuth();
-    },
 
-    // ---------------- AUTH ----------------
-
-    showAuth() {
-        this.root.innerHTML = `
-            <div class="fw-auth">
-                <h2>Feedwall</h2>
-                <input id="fw-username" placeholder="Username" />
-                <input id="fw-passcode" placeholder="6-digit PIN" maxlength="6" />
-                <div class="fw-actions">
-                    <button id="fw-login">Login</button>
-                    <button id="fw-register">Register</button>
-                </div>
-                <p id="fw-msg"></p>
-            </div>
-        `;
-
-        document.getElementById("fw-login").onclick = () => this.login();
-        document.getElementById("fw-register").onclick = () => this.register();
-    },
-
-    async login() {
-        const username = fwVal("fw-username");
-        const passcode = fwVal("fw-passcode");
-
-        const res = await fetch(API_BASE + "login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, passcode })
+        window.addEventListener("resize", () => {
+            this.viewport.width = window.innerWidth;
+            this.viewport.height = window.innerHeight;
         });
-
-        const data = await res.json();
-
-        if (data.token) {
-            localStorage.setItem("fw_token", data.token);
-            this.token = data.token;
-            this.loadApp();
-        } else fwMsg(data.error);
-    },
-
-    async register() {
-        const username = fwVal("fw-username");
-        const passcode = fwVal("fw-passcode");
-
-        const res = await fetch(API_BASE + "register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, passcode })
-        });
-
-        const data = await res.json();
-        fwMsg(data.success ? "Registered!" : data.error);
-    },
-
-    logout() {
-        localStorage.removeItem("fw_token");
-        this.token = null;
-        this.showAuth();
     },
 
     // ---------------- APP ----------------
@@ -84,65 +30,25 @@ const App = {
             <div id="fw-topbar">
                 <button id="fw-logout">Logout</button>
                 <button id="fw-new-post">+ Post</button>
-                <button id="fw-new-indicator" class="hidden">↑ New Posts</button>
             </div>
 
             <div id="fw-canvas-wrapper">
                 <div id="fw-canvas"></div>
             </div>
-
-            <div id="fw-post-box" class="hidden">
-                <textarea id="fw-post-text"></textarea>
-                <input type="file" id="fw-post-image" />
-                <button id="fw-submit-post">Submit</button>
-            </div>
         `;
 
         document.getElementById("fw-logout").onclick = () => this.logout();
-        document.getElementById("fw-new-post").onclick = () => this.togglePostBox();
-        document.getElementById("fw-submit-post").onclick = () => this.submitPost();
-        document.getElementById("fw-new-indicator").onclick = () => this.injectNewPosts();
+
+        this.canvas = document.getElementById("fw-canvas");
 
         this.initPanZoom();
         await this.loadWall();
-        this.startPolling();
     },
 
     async loadWall() {
         const res = await fetch(API_BASE + "get-wall");
-        const posts = await res.json();
-
-        this.posts = posts;
-        this.lastFetch = new Date().toISOString();
-
-        this.renderPosts();
-    },
-
-    // ---------------- REAL-TIME ----------------
-
-    startPolling() {
-        setInterval(async () => {
-            const res = await fetch(API_BASE + "get-wall");
-            const latest = await res.json();
-
-            const newPosts = latest.filter(p =>
-                new Date(p.created_at) > new Date(this.lastFetch)
-            );
-
-            if (newPosts.length) {
-                this.pendingNew = newPosts;
-                document.getElementById("fw-new-indicator").classList.remove("hidden");
-            }
-        }, 30000);
-    },
-
-    injectNewPosts() {
-        this.posts = [...this.pendingNew, ...this.posts];
-        this.pendingNew = [];
-
-        document.getElementById("fw-new-indicator").classList.add("hidden");
-
-        this.renderPosts(true); // animate center injection
+        this.posts = await res.json();
+        this.renderVisible();
     },
 
     // ---------------- RADIAL ----------------
@@ -157,20 +63,44 @@ const App = {
         };
     },
 
-    renderPosts(animate = false) {
-        const canvas = document.getElementById("fw-canvas");
-        canvas.innerHTML = "";
+    isVisible(x, y) {
+        const margin = 200;
 
+        return (
+            x > -this.viewport.width/2 - margin &&
+            x < this.viewport.width/2 + margin &&
+            y > -this.viewport.height/2 - margin &&
+            y < this.viewport.height/2 + margin
+        );
+    },
+
+    renderVisible() {
         this.posts.forEach((p, i) => {
             const pos = this.radialPosition(i);
 
-            const ageHrs = (Date.now() - new Date(p.created_at)) / 3600000;
-            const opacity = Math.max(0.2, 1 - ageHrs / 24);
+            const screenX = pos.x * this.scale + this.offset.x;
+            const screenY = pos.y * this.scale + this.offset.y;
 
-            const el = document.createElement("div");
-            el.className = "fw-post";
+            if (!this.isVisible(screenX, screenY)) {
+                if (this.elements.has(p.post_id)) {
+                    this.elements.get(p.post_id).remove();
+                    this.elements.delete(p.post_id);
+                }
+                return;
+            }
 
-            // LOD swap
+            if (!this.elements.has(p.post_id)) {
+                const el = document.createElement("div");
+                el.className = "fw-post";
+                el.onclick = () => this.openComments(p.post_id);
+
+                this.canvas.appendChild(el);
+                this.elements.set(p.post_id, el);
+            }
+
+            const el = this.elements.get(p.post_id);
+
+            // LOD
             const imgSrc = this.scale > 1.5
                 ? `/wp-content/uploads/feedwall_media/${p.image_path}_wall.jpg`
                 : `/wp-content/uploads/feedwall_media/${p.image_path}_thumb.jpg`;
@@ -180,32 +110,18 @@ const App = {
                 <p>${p.content_text}</p>
             `;
 
-            if (animate && i < this.pendingNew.length) {
-                el.style.transform = `translate(0px, 0px)`;
-                setTimeout(() => {
-                    el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
-                }, 50);
-            } else {
-                el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
-            }
-
-            el.style.opacity = opacity;
-
-            el.onclick = () => this.openComments(p.post_id);
-
-            canvas.appendChild(el);
+            el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
         });
     },
 
     // ---------------- PAN + ZOOM ----------------
 
     initPanZoom() {
-        const canvas = document.getElementById("fw-canvas");
-
         let dragging = false;
         let start = { x: 0, y: 0 };
 
-        canvas.addEventListener("mousedown", e => {
+        // Desktop
+        this.canvas.addEventListener("mousedown", e => {
             dragging = true;
             start = { x: e.clientX, y: e.clientY };
         });
@@ -222,23 +138,41 @@ const App = {
 
         window.addEventListener("mouseup", () => dragging = false);
 
-        canvas.addEventListener("wheel", e => {
+        // Mobile touch
+        let lastTouch = null;
+
+        this.canvas.addEventListener("touchstart", e => {
+            lastTouch = e.touches[0];
+        });
+
+        this.canvas.addEventListener("touchmove", e => {
+            const touch = e.touches[0];
+
+            this.offset.x += touch.clientX - lastTouch.clientX;
+            this.offset.y += touch.clientY - lastTouch.clientY;
+
+            this.updateTransform();
+            lastTouch = touch;
+        });
+
+        // Zoom
+        this.canvas.addEventListener("wheel", e => {
             e.preventDefault();
 
             this.scale += e.deltaY * -0.001;
             this.scale = Math.min(Math.max(0.4, this.scale), 3);
 
             this.updateTransform();
-            this.renderPosts(); // LOD refresh
         });
     },
 
     updateTransform() {
-        const canvas = document.getElementById("fw-canvas");
-        canvas.style.transform = `
+        this.canvas.style.transform = `
             translate(${this.offset.x}px, ${this.offset.y}px)
             scale(${this.scale})
         `;
+
+        requestAnimationFrame(() => this.renderVisible());
     },
 
     // ---------------- COMMENTS ----------------
@@ -261,7 +195,7 @@ const App = {
         document.body.appendChild(modal);
 
         document.getElementById("fw-send").onclick = async () => {
-            const text = fwVal("fw-comment-input");
+            const text = document.getElementById("fw-comment-input").value;
 
             await fetch(API_BASE + "add-comment", {
                 method: "POST",
@@ -277,8 +211,5 @@ const App = {
         };
     }
 };
-
-function fwVal(id) { return document.getElementById(id).value; }
-function fwMsg(msg) { document.getElementById("fw-msg").innerText = msg; }
 
 document.addEventListener("DOMContentLoaded", () => App.init());
