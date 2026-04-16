@@ -1,3 +1,5 @@
+/* ---------------- ROOT ---------------- */
+
 #feedwall-root {
     width: 100%;
     height: 100vh;
@@ -5,107 +7,10 @@
     color: #fff;
     overflow: hidden;
     position: relative;
+    font-family: system-ui, sans-serif;
 }
 
-#feedwall-app {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-}
-
-#fw-canvas {
-    position: absolute;
-    width: 2000px;
-    height: 2000px;
-    transform-origin: center;
-}
-
-.fw-post {
-    position: absolute;
-    width: 120px;
-    transition: transform 0.5s ease, opacity 1s;
-}
-
-.fw-post img {
-    width: 100%;
-    border-radius: 8px;
-}
-
-#fw-new-btn {
-    position: fixed;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 999;
-}
-#fw-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-}
-
-.fw-modal-content {
-    background: #111;
-    padding: 20px;
-    margin: 10% auto;
-    width: 300px;
-}
-
-.fw-auth {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 250px;
-    margin: 100px auto;
-}
-
-.fw-auth input {
-    padding: 10px;
-    background: #222;
-    border: none;
-    color: #fff;
-}
-
-.fw-actions {
-    display: flex;
-    gap: 10px;
-}
-
-#fw-topbar {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    z-index: 1000;
-}
-
-#fw-canvas {
-    margin-top: 60px;
-    padding: 20px;
-}
-
-.fw-post {
-    background: #1a1a1a;
-    padding: 10px;
-    margin-bottom: 10px;
-}
-
-.hidden {
-    display: none;
-}
-
-.fw-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-}
-
-.fw-modal-box {
-    background: #111;
-    padding: 20px;
-    margin: 10% auto;
-    width: 300px;
-}
+/* ---------------- CANVAS ---------------- */
 
 #fw-canvas-wrapper {
     position: fixed;
@@ -117,19 +22,118 @@
     position: absolute;
     top: 50%;
     left: 50%;
+    width: 2000px;
+    height: 2000px;
     transform-origin: center;
+    will-change: transform;
 }
+
+/* ---------------- POSTS ---------------- */
 
 .fw-post {
     position: absolute;
     width: 120px;
-    transition: transform 0.4s ease, opacity 1s;
+    padding: 8px;
+    background: #1a1a1a;
+    border-radius: 12px;
+
+    transition:
+        transform 0.25s ease,
+        opacity 0.6s ease,
+        box-shadow 0.3s ease,
+        border 0.3s ease;
+
+    will-change: transform;
+    cursor: pointer;
 }
 
+/* Glow animation base */
+.fw-post::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 14px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Hover / interaction */
+.fw-post:hover {
+    transform: scale(1.08);
+    z-index: 20;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+/* Tap feedback */
+.fw-post:active {
+    transform: scale(0.95);
+}
+
+/* Image */
 .fw-post img {
     width: 100%;
-    border-radius: 8px;
+    border-radius: 10px;
+    margin-bottom: 6px;
 }
+
+/* Text */
+.fw-post p {
+    font-size: 13px;
+    line-height: 1.3;
+    color: #ddd;
+}
+
+/* ---------------- GLOW + PULSE ---------------- */
+
+/* Subtle breathing animation */
+@keyframes fw-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
+
+/* Glow flicker */
+@keyframes fw-glow {
+    0% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.4; }
+}
+
+/* Apply via JS dynamically (base support) */
+.fw-post.glow {
+    animation: fw-pulse 2s infinite ease-in-out;
+}
+
+.fw-post.glow::after {
+    background: radial-gradient(circle, rgba(255,100,150,0.4), transparent);
+    animation: fw-glow 2s infinite ease-in-out;
+}
+
+/* ---------------- TOPBAR ---------------- */
+
+#fw-topbar {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    display: flex;
+    gap: 10px;
+}
+
+#fw-topbar button {
+    background: #222;
+    border: none;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#fw-topbar button:hover {
+    background: #333;
+}
+
+/* ---------------- NEW POSTS INDICATOR ---------------- */
 
 #fw-new-indicator {
     position: fixed;
@@ -139,5 +143,87 @@
     z-index: 1000;
     background: #ff4757;
     color: #fff;
-    padding: 8px 12px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    animation: fw-pulse 1.5s infinite;
+}
+
+/* ---------------- MODAL ---------------- */
+
+.fw-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.fw-modal-box {
+    background: #111;
+    padding: 20px;
+    border-radius: 12px;
+    width: 300px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.fw-modal-box input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 10px;
+    background: #222;
+    border: none;
+    color: #fff;
+}
+
+/* ---------------- AUTH ---------------- */
+
+.fw-auth {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 260px;
+    margin: 100px auto;
+}
+
+.fw-auth input {
+    padding: 10px;
+    background: #222;
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+}
+
+.fw-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* ---------------- UTIL ---------------- */
+
+.hidden {
+    display: none;
+}
+
+/* ---------------- MOBILE ---------------- */
+
+@media (max-width: 600px) {
+
+    .fw-post {
+        width: 100px;
+    }
+
+    #fw-topbar {
+        top: 5px;
+        left: 5px;
+    }
+
+    #fw-new-indicator {
+        top: 5px;
+        font-size: 12px;
+    }
 }
