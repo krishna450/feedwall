@@ -16,8 +16,10 @@ class Feedwall_Threads {
             SELECT DISTINCT p.*
             FROM $posts p
             LEFT JOIN $comments c ON p.post_id = c.post_id
-            WHERE p.user_id = %d OR c.user_id = %d
+            WHERE (p.user_id = %d OR c.user_id = %d)
             AND p.created_at > NOW() - INTERVAL 120 HOUR
+            AND p.status != 'deleted'
+            ORDER BY p.created_at DESC
         ", $user_id, $user_id));
     }
 }
