@@ -5,73 +5,91 @@ class Feedwall_API {
 
     public function register_routes() {
 
+        $public = ['permission_callback' => '__return_true'];
+
         register_rest_route('feedwall/v1', '/check-username', [
             'methods' => 'GET',
-            'callback' => [$this, 'check_username']
+            'callback' => [$this, 'check_username'],
+            ...$public
         ]);
 
         register_rest_route('feedwall/v1', '/register', [
             'methods' => 'POST',
-            'callback' => [$this, 'register']
+            'callback' => [$this, 'register'],
+            ...$public
         ]);
 
         register_rest_route('feedwall/v1', '/login', [
             'methods' => 'POST',
-            'callback' => [$this, 'login']
+            'callback' => [$this, 'login'],
+            ...$public
         ]);
 
         register_rest_route('feedwall/v1', '/geo-detect', [
             'methods' => 'GET',
-            'callback' => [$this, 'geo_detect']
+            'callback' => [$this, 'geo_detect'],
+            ...$public
         ]);
 
         register_rest_route('feedwall/v1', '/geo-override', [
             'methods' => 'POST',
-            'callback' => [$this, 'geo_override']
+            'callback' => [$this, 'geo_override'],
+            ...$public
         ]);
+
         register_rest_route('feedwall/v1', '/submit-post', [
-    'methods' => 'POST',
-    'callback' => ['Feedwall_Posts', 'submit_post']
-]);
+            'methods' => 'POST',
+            'callback' => ['Feedwall_Posts', 'submit_post'],
+            ...$public
+        ]);
 
-register_rest_route('feedwall/v1', '/get-wall', [
-    'methods' => 'GET',
-    'callback' => ['Feedwall_Posts', 'get_wall']
-]);
+        register_rest_route('feedwall/v1', '/get-wall', [
+            'methods' => 'GET',
+            'callback' => ['Feedwall_Posts', 'get_wall'],
+            ...$public
+        ]);
+
         register_rest_route('feedwall/v1', '/report-post', [
-    'methods' => 'POST',
-    'callback' => ['Feedwall_Moderation', 'report_post']
-]);
+            'methods' => 'POST',
+            'callback' => ['Feedwall_Moderation', 'report_post'],
+            ...$public
+        ]);
+
         register_rest_route('feedwall/v1', '/add-comment', [
-    'methods' => 'POST',
-    'callback' => ['Feedwall_Comments', 'add_comment']
-]);
+            'methods' => 'POST',
+            'callback' => ['Feedwall_Comments', 'add_comment'],
+            ...$public
+        ]);
 
-register_rest_route('feedwall/v1', '/get-comments', [
-    'methods' => 'GET',
-    'callback' => ['Feedwall_Comments', 'get_comments']
-]);
-        
-register_rest_route('feedwall/v1', '/my-threads', [
-    'methods' => 'GET',
-    'callback' => ['Feedwall_Threads', 'my_threads']
-]);
+        register_rest_route('feedwall/v1', '/get-comments', [
+            'methods' => 'GET',
+            'callback' => ['Feedwall_Comments', 'get_comments'],
+            ...$public
+        ]);
 
-register_rest_route('feedwall/v1', '/tg-pair', [
-    'methods' => 'POST',
-    'callback' => ['Feedwall_Telegram', 'tg_pair']
-]);
+        register_rest_route('feedwall/v1', '/my-threads', [
+            'methods' => 'GET',
+            'callback' => ['Feedwall_Threads', 'my_threads'],
+            ...$public
+        ]);
 
-register_rest_route('feedwall/v1', '/tg-webhook', [
-    'methods' => 'POST',
-    'callback' => ['Feedwall_Telegram', 'webhook']
-]);
+        register_rest_route('feedwall/v1', '/tg-pair', [
+            'methods' => 'POST',
+            'callback' => ['Feedwall_Telegram', 'tg_pair'],
+            ...$public
+        ]);
+
+        register_rest_route('feedwall/v1', '/tg-webhook', [
+            'methods' => 'POST',
+            'callback' => ['Feedwall_Telegram', 'webhook'],
+            'permission_callback' => '__return_true' // explicit for webhook
+        ]);
     }
 
     public function check_username($req) {
         global $wpdb;
 
-        $username = sanitize_text_field($req['username']);
+        $username = sanitize_text_field($req['username'] ?? '');
         $table = Feedwall_DB::table('users');
 
         $exists = $wpdb->get_var($wpdb->prepare(
@@ -85,14 +103,24 @@ register_rest_route('feedwall/v1', '/tg-webhook', [
     public function register($req) {
         global $wpdb;
 
-        $username = sanitize_text_field($req['username']);
-        $passcode = sanitize_text_field($req['passcode']);
+        $username = sanitize_text_field($req['username'] ?? '');
+        $passcode = sanitize_text_field($req['passcode'] ?? '');
 
         if (!preg_match('/^\d{6}$/', $passcode)) {
             return ['error' => 'Invalid passcode'];
         }
 
         $table = Feedwall_DB::table('users');
+
+        // Prevent duplicate usernames
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $table WHERE username = %s",
+            $username
+        ));
+
+        if ($exists) {
+            return ['error' => 'Username already exists'];
+        }
 
         $wpdb->insert($table, [
             'username' => $username,
@@ -105,12 +133,13 @@ register_rest_route('feedwall/v1', '/tg-webhook', [
     public function login($req) {
         global $wpdb;
 
-        $username = sanitize_text_field($req['username']);
-        $passcode = sanitize_text_field($req['passcode']);
+        $username = sanitize_text_field($req['username'] ?? '');
+        $passcode = sanitize_text_field($req['passcode'] ?? '');
 
+        $limit = Feedwall_Settings::get('login_limit', 5);
         $rate_key = "fw_login_" . md5($username);
 
-        if (!Feedwall_Auth::rate_limit($rate_key)) {
+        if (!Feedwall_Auth::rate_limit($rate_key, $limit)) {
             return ['error' => 'Too many attempts'];
         }
 
@@ -136,8 +165,8 @@ register_rest_route('feedwall/v1', '/tg-webhook', [
     }
 
     public function geo_override($req) {
-        $state = sanitize_text_field($req['state']);
-        set_transient('fw_geo_override_' . $_SERVER['REMOTE_ADDR'], $state, 3600);
+        $state = sanitize_text_field($req['state'] ?? 'KL');
+        set_transient('fw_geo_override_' . ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'), $state, 3600);
         return ['state' => $state];
     }
 }
